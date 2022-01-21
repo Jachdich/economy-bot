@@ -4,7 +4,7 @@ intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
 
-TOKEN = "ODA5NTU5MTM2NDI0NDI3NTUx.YCW2sw.ZhTNnJunqpJfwHE0CgQ0PGYyE4A"
+TOKEN = ""
 client = discord.Client(intents=intents)
 
 listening_for_bal = -1
