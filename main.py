@@ -4,7 +4,9 @@ intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
 
-TOKEN = "ODA5NTU5MTM2NDI0NDI3NTUx.YCW2sw.ZhTNnJunqpJfwHE0CgQ0PGYyE4A"
+with open("token.txt", "r") as f:
+    TOKEN = f.read()
+
 client = discord.Client(intents=intents)
 
 listening_for_bal = -1
@@ -17,8 +19,25 @@ GREEN = 6732650
 RED = 15684432
 BLUE = 240116
 
-WORK_TIME = 10
-SLUT_TIME = 5
+WORK_TIME = 10 * 60
+
+SLUT_TIME = 15 * 60
+SLUT_MIN = 800
+SLUT_MAX = 2200
+SLUT_MIN_PERCENT = 35
+SLUT_MAX_PERCENT = 75
+SLUT_CHANCE = 0.65
+SLUT_MESSAGE = "You cannot be a slut for"
+
+CRIME_TIME = 15 * 60
+CRIME_MIN = 5000
+CRIME_MAX = 15000
+CRIME_MIN_PERCENT = 65
+CRIME_MAX_PERCENT = 90
+CRIME_CHANCE = 0.85
+CRIME_MESSAGE = "You cannot commit a crime for"
+
+MAX_BANK = 10000
 
 class User:
     def __init__(self, uuid):
@@ -92,7 +111,7 @@ async def send_no_time(ctx, msg, min_time, last_time):
     else:
         minutes_string = ""
 
-    await send_generic_embed(message, f":stopwatch: {msg} {minutes_string}{seconds} seconds", BLUE)
+    await send_generic_embed(ctx, f":stopwatch: {msg} {minutes_string}{seconds} seconds", BLUE)
 
 @client.event
 async def on_message(message):
@@ -142,7 +161,7 @@ async def on_message(message):
         user = users[message.author.id]
         current_time = datetime.datetime.now().timestamp()
         if current_time - user.last_work < WORK_TIME:
-            await send_no_time(msg, "You cannot work for", WORK_TIME, user.last_work)
+            await send_no_time(message, "You cannot work for", WORK_TIME, user.last_work)
             return
 
         user.last_work = current_time
@@ -172,6 +191,14 @@ async def on_message(message):
             if amt > user.cash:
                 await send_error(message, "You don't have that much money to deposit. You currently have £{user.cash} on hand.")
                 return
+            if amt <= 0:
+                await send_error(message, "You cannot deposit £0.")
+                return
+            
+            amt = min(MAX_BANK - user.bank, amt)
+            if MAX_BANK - user.bank <= 0:
+                await send_error(message, "Maximum bank balance reached.")
+                return
             msg = f"Deposited £{amt} to your bank!"
             user.bank += amt
             user.cash -= amt
@@ -188,23 +215,42 @@ async def on_message(message):
         
         await send_success(message, msg)
 
-    if message.content == "€slut":
+    if message.content == "€slut" or message.content == "€crime":
         user = users[message.author.id]
         current_time = datetime.datetime.now().timestamp()
-        if current_time - user.last_slut < SLUT_TIME:
-            await send_no_time(message, "You cannot be a slut for", SLUT_TIME, user.last_slut)
-            return
+        if message.content == "€slut":
+            if current_time - user.last_slut < SLUT_TIME:
+                await send_no_time(message, SLUT_MESSAGE, SLUT_TIME, user.last_slut)
+                return
 
-        user.last_slut = current_time
+            user.last_slut = current_time
 
-        if random.random() > 0.75:
-            amount = random.randint(800, 2200)
+            chance = SLUT_CHANCE
+            minamt = SLUT_MIN
+            maxamt = SLUT_MAX
+            minpercent = SLUT_MIN_PERCENT
+            maxpercent = SLUT_MAX_PERCENT
+            
+        else:
+            if current_time - user.last_crime < CRIME_TIME:
+                await send_no_time(message, CRIME_MESSAGE, CRIME_TIME, user.last_crime)
+                return
+
+            user.last_crime = current_time
+            chance = CRIME_CHANCE
+            minamt = CRIME_MIN
+            maxamt = CRIME_MAX
+            minpercent = CRIME_MIN_PERCENT
+            maxpercent = CRIME_MAX_PERCENT
+            
+        if random.random() > chance:
+            amount = random.randint(minamt, maxamt)
             user.cash += amount
             await send_success(message, random.choice(goodmsgs).replace("{amount}", str(amount)), emoji=False)
         else:
-            amount = (user.cash + user/bank) * (random.randint(40, 70) / 100)
-            user.cash -= amount
-            await send_success(message, random.choice(badmsgs).replace("{amount}", str(amount)), emoji=False)
+            amount = (user.cash + user.bank) * (random.randint(minpercent, maxpercent) / 100)
+            user.cash -= round(amount)
+            await send_error(message, random.choice(badmsgs).replace("{amount}", str(amount)), emoji=False)
 
     if listening_for_bal != -1 and message.author.id == 292953664492929025 and len(message.embeds) > 0:
         embed = message.embeds[0].to_dict()
