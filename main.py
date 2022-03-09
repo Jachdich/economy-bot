@@ -39,6 +39,13 @@ CRIME_MESSAGE = "You cannot commit a crime for"
 
 MAX_BANK = 10000
 
+def getBank(): return sum([user.bank for _, user in users.items()])
+def getCash(): return sum([user.cash for _, user in users.items()])
+def updateCash(amt):
+    num_users = len(users)
+    for _, user in users.items():
+        user.cash += round(amt / num_users, 2)
+
 class User:
     def __init__(self, uuid):
         self.cash = 0
@@ -166,7 +173,7 @@ async def on_message(message):
 
         user.last_work = current_time
         amount = random.randint(400, 1200)
-        user.cash += amount
+        updateCash(amount)
         await send_success(message, random.choice(goodmsgs).replace("{amount}", str(amount)), emoji=False)
 
     if message.content.startswith("€dep") or message.content.startswith("€with"):
@@ -245,11 +252,11 @@ async def on_message(message):
             
         if random.random() > chance:
             amount = random.randint(minamt, maxamt)
-            user.cash += amount
+            updateCash(amount)
             await send_success(message, random.choice(goodmsgs).replace("{amount}", str(amount)), emoji=False)
         else:
-            amount = (user.cash + user.bank) * (random.randint(minpercent, maxpercent) / 100)
-            user.cash -= round(amount)
+            amount = (getCash() + getBank()) * (random.randint(minpercent, maxpercent) / 100)
+            updateCash(-round(amount))
             await send_error(message, random.choice(badmsgs).replace("{amount}", str(amount)), emoji=False)
 
     if listening_for_bal != -1 and message.author.id == 292953664492929025 and len(message.embeds) > 0:
