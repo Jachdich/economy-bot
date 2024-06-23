@@ -1,13 +1,10 @@
-import discord, time, asyncio, json, datetime, re, random, math
+import sys
+sys.path.append("/home/james/Build/aster/asterpy/src")
+import asterpy, time, asyncio, json, datetime, re, random, math
 
-intents = discord.Intents.default()
-intents.members = True
-intents.messages = True
 
-with open("token.txt", "r") as f:
-    TOKEN = f.read()
-
-client = discord.Client(intents=intents)
+client = asterpy.Client("bean", "a")
+client.add_server("cospox.com", 2345, uuid=1508917622722412285)
 
 listening_for_bal = -1
 
@@ -94,20 +91,10 @@ def save():
         f.write(json.dumps(data))
 
 
-async def send_generic_embed(ctx, msg, colour):
-    embed = {
-        'author': {
-             "name": str(ctx.author),
-             "icon_url": str(ctx.author.avatar_url_as(format="png", static_format="png", size=128)),
-        },
-        'color': colour,
-        'type': 'rich',
-        'description': msg
-    }
-    await ctx.channel.send(embed=discord.Embed.from_dict(embed))
-
-async def send_error(ctx, msg, emoji=True):   await send_generic_embed(ctx, f"{':no_entry: ' if emoji else ''}{msg}", RED)
-async def send_success(ctx, msg, emoji=True): await send_generic_embed(ctx, f"{':white_check_mark: ' if emoji else ''}{msg}", GREEN)
+async def send_error(ctx, msg, emoji=True):
+    await ctx.channel.send(f"{'⛔ ' if emoji else ''}{msg}")
+async def send_success(ctx, msg, emoji=True):
+    await ctx.channel.send(f"{'✅ ' if emoji else ''}{msg}")
 
 async def send_no_time(ctx, msg, min_time, last_time):
     to_go = min_time - (datetime.datetime.now().timestamp() - last_time)
@@ -118,19 +105,19 @@ async def send_no_time(ctx, msg, min_time, last_time):
     else:
         minutes_string = ""
 
-    await send_generic_embed(ctx, f":stopwatch: {msg} {minutes_string}{seconds} seconds", BLUE)
+    await ctx.channel.send(f"⏱ {msg} {minutes_string}{seconds} seconds")
 
 @client.event
-async def on_message(message):
+async def on_message(message: asterpy.Message):
     global users
     global listening_for_bal
     if message.content.startswith("€"):
-        if not message.author.id in users:
-            users[message.author.id] = User(message.author.id)
+        if not message.author.uuid in users:
+            users[message.author.uuid] = User(message.author.uuid)
     if message.content.startswith("€bal"):
         sp = message.content.split(" ")
         if len(sp) == 1:
-            user = users[message.author.id]
+            user = users[message.author.uuid]
         elif len(sp) == 2:
             try:
                 uuid = int(sp[1].replace("<", "").replace(">", "").replace("@", "").replace("!", ""))
@@ -141,31 +128,14 @@ async def on_message(message):
         else:
             await send_error(message, f"Invalaid `[user]` argument given.\n\nUsage:\n`€bal [user]`")
             return
-            
-        embed = {
-            "author": 
-                {"name": str(message.author),
-                 #"url": "https://unbelievaboat.com/leaderboard/757217204310769695/336829417231745025", TODO
-                 "icon_url": str(message.author.avatar_url_as(format="png", static_format="png", size=128)),
-                #TODO proxy_url?
-            },
-            "fields": [
-                {"name": "Cash:", "value": f"£{user.cash}", "inline": True},
-                {"name": "Bank:", "value": f"£{user.bank}", "inline": True},
-                {"name": "Total:", "value": f"£{user.bank + user.cash}", "inline": True}
-            ],
-            "color": BLUE,
-            "timestamp": str(datetime.datetime.utcnow()),
-            "type": "rich",
-            "description": "Leaderboard Rank: NaNsth"}
-        await message.channel.send(embed=discord.Embed.from_dict(embed))
 
-    if message.content == "€transfer":
-        listening_for_bal = message.author.id
-        await message.channel.send("Okay, now run £bal")
+        msg = f"""Cash:  £{user.cash}
+Bank:  £{user.bank}
+Total: £{user.bank + user.cash}"""
+        await message.channel.send(msg)
 
     if message.content == "€work":
-        user = users[message.author.id]
+        user = users[message.author.uuid]
         current_time = datetime.datetime.now().timestamp()
         if current_time - user.last_work < WORK_WAIT_SECONDS:
             await send_no_time(message, "You cannot work for", WORK_WAIT_SECONDS, user.last_work)
@@ -181,7 +151,7 @@ async def on_message(message):
             await send_error(message, f"Too few arguments given.\n\nUsage:\n`{message.content.split(' ')[0]} <amount or all>`")
             return
 
-        user = users[message.author.id]
+        user = users[message.author.uuid]
         amt = message.content.split(" ")[1]
         if amt == "all":
             if message.content.startswith("€with"):
@@ -223,7 +193,7 @@ async def on_message(message):
         await send_success(message, msg)
 
     if message.content == "€slut" or message.content == "€crime":
-        user = users[message.author.id]
+        user = users[message.author.uuid]
         current_time = datetime.datetime.now().timestamp()
         if message.content == "€slut":
             if current_time - user.last_slut < SLUT_WAIT_SECONDS:
@@ -254,13 +224,6 @@ async def on_message(message):
             update_cash(-round(amount))
             await send_error(message, random.choice(badmsgs).replace("{amount}", str(amount)), emoji=False)
 
-    if listening_for_bal is not None and message.author.id == 292953664492929025 and len(message.embeds) > 0:
-        embed = message.embeds[0].to_dict()
-        if embed["author"]["name"] == str(client.get_user(listening_for_bal)):
-            user = users[listening_for_bal]
-            user.cash = int(embed["fields"][0]["value"].replace("£", "").replace(",", ""))
-            user.bank = int(embed["fields"][1]["value"].replace("£", "").replace(",", ""))
-            listening_for_bal = None
     save()
 
 @client.event
@@ -289,6 +252,6 @@ async def on_ready():
 # 
     # print("done")
 
-client.run(TOKEN)
+client.run()
 
 save()
