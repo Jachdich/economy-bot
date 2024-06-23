@@ -15,33 +15,33 @@ users = {}
 goodmsgs = []
 badmsgs = []
 
-GREEN = 6732650
-RED = 15684432
-BLUE = 240116
+GREEN = 0x66BB6A
+RED   = 0xEF5350
+BLUE  = 0x03A9F4
 
-WORK_TIME = 10 * 60
+WORK_WAIT_SECONDS = 10 * 60
 
-SLUT_TIME = 15 * 60
+SLUT_WAIT_SECONDS = 15 * 60
 SLUT_MIN = 800
 SLUT_MAX = 2200
 SLUT_MIN_PERCENT = 35
 SLUT_MAX_PERCENT = 75
 SLUT_CHANCE = 0.65
-SLUT_MESSAGE = "You cannot be a slut for"
+SLUT_WAIT_MESSAGE = "You cannot be a slut for"
 
-CRIME_TIME = 15 * 60
-CRIME_MIN = 5000
-CRIME_MAX = 15000
-CRIME_MIN_PERCENT = 65
-CRIME_MAX_PERCENT = 90
-CRIME_CHANCE = 0.85
-CRIME_MESSAGE = "You cannot commit a crime for"
-
+CRIME_WAIT_SECONDS = 15 * 60
+CRIME_MIN_GAIN = 5000
+CRIME_MAX_GAIN = 15000
+CRIME_MIN_PERCENT_LOSS = 65
+CRIME_MAX_PERCENT_LOSS = 90
+CRIME_SUCCESS_CHANCE = 0.85
+CRIME_WAIT_MESSAGE = "You cannot commit a crime for"
+   
 MAX_BANK = 10000
 
-def getBank(): return sum([user.bank for _, user in users.items()])
-def getCash(): return sum([user.cash for _, user in users.items()])
-def updateCash(amt):
+def get_bank(): return sum([user.bank for _, user in users.items()])
+def get_cash(): return sum([user.cash for _, user in users.items()])
+def update_cash(amt):
     num_users = len(users)
     for _, user in users.items():
         user.cash += round(amt / num_users, 2)
@@ -167,13 +167,13 @@ async def on_message(message):
     if message.content == "€work":
         user = users[message.author.id]
         current_time = datetime.datetime.now().timestamp()
-        if current_time - user.last_work < WORK_TIME:
-            await send_no_time(message, "You cannot work for", WORK_TIME, user.last_work)
+        if current_time - user.last_work < WORK_WAIT_SECONDS:
+            await send_no_time(message, "You cannot work for", WORK_WAIT_SECONDS, user.last_work)
             return
 
         user.last_work = current_time
         amount = random.randint(400, 1200)
-        updateCash(amount)
+        update_cash(amount)
         await send_success(message, random.choice(goodmsgs).replace("{amount}", str(amount)), emoji=False)
 
     if message.content.startswith("€dep") or message.content.startswith("€with"):
@@ -226,8 +226,8 @@ async def on_message(message):
         user = users[message.author.id]
         current_time = datetime.datetime.now().timestamp()
         if message.content == "€slut":
-            if current_time - user.last_slut < SLUT_TIME:
-                await send_no_time(message, SLUT_MESSAGE, SLUT_TIME, user.last_slut)
+            if current_time - user.last_slut < SLUT_WAIT_SECONDS:
+                await send_no_time(message, SLUT_WAIT_MESSAGE, SLUT_WAIT_SECONDS, user.last_slut)
                 return
 
             user.last_slut = current_time
@@ -239,34 +239,30 @@ async def on_message(message):
             maxpercent = SLUT_MAX_PERCENT
             
         else:
-            if current_time - user.last_crime < CRIME_TIME:
-                await send_no_time(message, CRIME_MESSAGE, CRIME_TIME, user.last_crime)
+            if current_time - user.last_crime < CRIME_WAIT_SECONDS:
+                await send_no_time(message, CRIME_WAIT_MESSAGE, CRIME_WAIT_SECONDS, user.last_crime)
                 return
 
             user.last_crime = current_time
-            chance = CRIME_CHANCE
-            minamt = CRIME_MIN
-            maxamt = CRIME_MAX
-            minpercent = CRIME_MIN_PERCENT
-            maxpercent = CRIME_MAX_PERCENT
             
-        if random.random() > chance:
-            amount = random.randint(minamt, maxamt)
-            updateCash(amount)
+        if random.random() > CRIME_SUCCESS_CHANCE:
+            amount = random.randint(CRIME_MIN_GAIN, CRIME_MAX_GAIN)
+            update_cash(amount)
             await send_success(message, random.choice(goodmsgs).replace("{amount}", str(amount)), emoji=False)
         else:
-            amount = (getCash() + getBank()) * (random.randint(minpercent, maxpercent) / 100)
-            updateCash(-round(amount))
+            amount = (get_cash() + get_bank()) * (random.randint(CRIME_MIN_PERCENT_LOSS, CRIME_MAX_PERCENT_LOSS) / 100)
+            update_cash(-round(amount))
             await send_error(message, random.choice(badmsgs).replace("{amount}", str(amount)), emoji=False)
 
-    if listening_for_bal != -1 and message.author.id == 292953664492929025 and len(message.embeds) > 0:
+    if listening_for_bal is not None and message.author.id == 292953664492929025 and len(message.embeds) > 0:
         embed = message.embeds[0].to_dict()
         if embed["author"]["name"] == str(client.get_user(listening_for_bal)):
             user = users[listening_for_bal]
             user.cash = int(embed["fields"][0]["value"].replace("£", "").replace(",", ""))
             user.bank = int(embed["fields"][1]["value"].replace("£", "").replace(",", ""))
-            listening_for_bal = -1
-    save()         
+            listening_for_bal = None
+    save()
+
 @client.event
 async def on_ready():
     print("ready lol")
