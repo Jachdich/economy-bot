@@ -1,5 +1,3 @@
-import sys
-sys.path.append("/home/james/Build/aster/asterpy/src")
 import asterpy, time, asyncio, json, datetime, re, random, math
 
 
