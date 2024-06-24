@@ -1,19 +1,12 @@
-import discord, time, asyncio, json, datetime, re, random, math
+import asterpy, time, asyncio, json, datetime, re, random, math
 
-intents = discord.Intents.default()
-intents.members = True
-intents.messages = True
 
-with open("token.txt", "r") as f:
-    TOKEN = f.read()
-
-client = discord.Client(intents=intents)
+client = asterpy.Client("bean", "a")
+client.add_server("cospox.com", 2345, uuid=1508917622722412285)
 
 listening_for_bal = -1
 
 users = {}
-goodmsgs = []
-badmsgs = []
 
 GREEN = 0x66BB6A
 RED   = 0xEF5350
@@ -22,11 +15,11 @@ BLUE  = 0x03A9F4
 WORK_WAIT_SECONDS = 10 * 60
 
 SLUT_WAIT_SECONDS = 15 * 60
-SLUT_MIN = 800000
-SLUT_MAX = 2200
-SLUT_MIN_PERCENT = 35
-SLUT_MAX_PERCENT = 75
-SLUT_CHANCE = 0.65
+SLUT_MIN_GAIN = 800000
+SLUT_MAX_GAIN = 2200
+SLUT_MIN_PERCENT_LOSS = 35
+SLUT_MAX_PERCENT_LOSS = 75
+SLUT_SUCCESS_CHANCE = 0.65
 SLUT_WAIT_MESSAGE = "You cannot be a slut for"
 
 CRIME_WAIT_SECONDS = 15 * 60
@@ -39,12 +32,8 @@ CRIME_WAIT_MESSAGE = "You cannot commit a crime for"
    
 MAX_BANK = 10000
 
-def get_bank(): return sum([user.bank for _, user in users.items()])
-def get_cash(): return sum([user.cash for _, user in users.items()])
-def update_cash(amt):
-    num_users = len(users)
-    for _, user in users.items():
-        user.cash += round(amt / num_users, 2)
+PREFIX = "€"
+CURRENCY = "€"
 
 class User:
     def __init__(self, uuid):
@@ -73,16 +62,14 @@ class User:
                 "last_work": self.last_work, "last_slut": self.last_slut, "last_crime": self.last_crime,
                 "last_income": self.last_income, "last_rob": self.last_rob}
 
-with open("good.txt", "r") as f: goodmsgs = [i for i in f.read().split("\n") if i != ""]
-with open("bad.txt", "r")  as f: badmsgs  = [i for i in f.read().split("\n") if i != ""]
-
 with open("users.json", "r") as f:
     data = f.read()
-    print(data)
     print(json.loads(data)["users"].items())
     for key, val in json.loads(data)["users"].items():
         users[int(key)] = User.from_json(val)
-    print(users)
+
+with open("messages.json", "r") as f:
+    MESSAGES = json.load(f)
 
 def save():
     global users
@@ -94,20 +81,10 @@ def save():
         f.write(json.dumps(data))
 
 
-async def send_generic_embed(ctx, msg, colour):
-    embed = {
-        'author': {
-             "name": str(ctx.author),
-             "icon_url": str(ctx.author.avatar_url_as(format="png", static_format="png", size=128)),
-        },
-        'color': colour,
-        'type': 'rich',
-        'description': msg
-    }
-    await ctx.channel.send(embed=discord.Embed.from_dict(embed))
-
-async def send_error(ctx, msg, emoji=True):   await send_generic_embed(ctx, f"{':no_entry: ' if emoji else ''}{msg}", RED)
-async def send_success(ctx, msg, emoji=True): await send_generic_embed(ctx, f"{':white_check_mark: ' if emoji else ''}{msg}", GREEN)
+async def send_error(ctx, msg, emoji=True):
+    await ctx.channel.send(f"{'⛔ ' if emoji else ''}{msg}")
+async def send_success(ctx, msg, emoji=True):
+    await ctx.channel.send(f"{'✅ ' if emoji else ''}{msg}")
 
 async def send_no_time(ctx, msg, min_time, last_time):
     to_go = min_time - (datetime.datetime.now().timestamp() - last_time)
@@ -118,19 +95,22 @@ async def send_no_time(ctx, msg, min_time, last_time):
     else:
         minutes_string = ""
 
-    await send_generic_embed(ctx, f":stopwatch: {msg} {minutes_string}{seconds} seconds", BLUE)
+    await ctx.channel.send(f"⏱ {msg} {minutes_string}{seconds} seconds")
 
 @client.event
-async def on_message(message):
+async def on_message(message: asterpy.Message):
+    if message.author.uuid == client.uuid:
+        return
+    print(message.content)
     global users
     global listening_for_bal
-    if message.content.startswith("€"):
-        if not message.author.id in users:
-            users[message.author.id] = User(message.author.id)
-    if message.content.startswith("€bal"):
+    if message.content.startswith(PREFIX):
+        if not message.author.uuid in users:
+            users[message.author.uuid] = User(message.author.uuid)
+    if message.content.startswith(PREFIX + "bal"):
         sp = message.content.split(" ")
         if len(sp) == 1:
-            user = users[message.author.id]
+            user = users[message.author.uuid]
         elif len(sp) == 2:
             try:
                 uuid = int(sp[1].replace("<", "").replace(">", "").replace("@", "").replace("!", ""))
@@ -141,31 +121,15 @@ async def on_message(message):
         else:
             await send_error(message, f"Invalaid `[user]` argument given.\n\nUsage:\n`€bal [user]`")
             return
-            
-        embed = {
-            "author": 
-                {"name": str(message.author),
-                 #"url": "https://unbelievaboat.com/leaderboard/757217204310769695/336829417231745025", TODO
-                 "icon_url": str(message.author.avatar_url_as(format="png", static_format="png", size=128)),
-                #TODO proxy_url?
-            },
-            "fields": [
-                {"name": "Cash:", "value": f"£{user.cash}", "inline": True},
-                {"name": "Bank:", "value": f"£{user.bank}", "inline": True},
-                {"name": "Total:", "value": f"£{user.bank + user.cash}", "inline": True}
-            ],
-            "color": BLUE,
-            "timestamp": str(datetime.datetime.utcnow()),
-            "type": "rich",
-            "description": "Leaderboard Rank: NaNsth"}
-        await message.channel.send(embed=discord.Embed.from_dict(embed))
 
-    if message.content == "€transfer":
-        listening_for_bal = message.author.id
-        await message.channel.send("Okay, now run £bal")
+        msg = f"""Bank Statement
+Cash:  £{user.cash}
+Bank:  £{user.bank}
+Total: £{user.bank + user.cash}"""
+        await message.channel.send(msg)
 
     if message.content == "€work":
-        user = users[message.author.id]
+        user = users[message.author.uuid]
         current_time = datetime.datetime.now().timestamp()
         if current_time - user.last_work < WORK_WAIT_SECONDS:
             await send_no_time(message, "You cannot work for", WORK_WAIT_SECONDS, user.last_work)
@@ -173,18 +137,18 @@ async def on_message(message):
 
         user.last_work = current_time
         amount = random.randint(400, 1200)
-        update_cash(amount)
-        await send_success(message, random.choice(goodmsgs).replace("{amount}", str(amount)), emoji=False)
+        user.cash += amount
+        await send_success(message, random.choice(MESSAGES["work"]).replace("{amount}", CURRENCY + str(amount)), emoji=False)
 
-    if message.content.startswith("€dep") or message.content.startswith("€with"):
+    if message.content.startswith(PREFIX + "dep") or message.content.startswith(PREFIX + "with"):
         if len(message.content.split(" ")) != 2:
             await send_error(message, f"Too few arguments given.\n\nUsage:\n`{message.content.split(' ')[0]} <amount or all>`")
             return
 
-        user = users[message.author.id]
+        user = users[message.author.uuid]
         amt = message.content.split(" ")[1]
         if amt == "all":
-            if message.content.startswith("€with"):
+            if message.content.startswith(PREFIX + "with"):
                 amt = user.bank
             else:
                 amt = user.cash
@@ -194,49 +158,50 @@ async def on_message(message):
             await send_error(message, f"Invalaid `<amount or all>` argument given.\n\nUsage:\n`{message.content.split(' ')[0]} <amount or all>`")
             return
 
-        if message.content.startswith("€dep"):
+        if message.content.startswith(PREFIX + "dep"):
             if amt > user.cash:
                 await send_error(message, "You don't have that much money to deposit. You currently have £{user.cash} on hand.")
                 return
             if amt <= 0:
-                await send_error(message, "You cannot deposit £0.")
+                await send_error(message, f"You cannot deposit {CURRENCY}0.")
                 return
             
             amt = min(MAX_BANK - user.bank, amt)
             if MAX_BANK - user.bank <= 0:
                 await send_error(message, "Maximum bank balance reached.")
                 return
-            msg = f"Deposited £{amt} to your bank!"
+            msg = f"Deposited {CURRENCY}{amt} to your bank!"
             user.bank += amt
             user.cash -= amt
-        elif message.content.startswith("€with"):
+        elif message.content.startswith(PREFIX + "with"):
             if amt > user.bank:
-                await send_error(message, "You don't have that much money to withdraw. You currently have £{user.bank} in the bank.")
+                await send_error(message, f"You don't have that much money to withdraw. You currently have {CURRENCY}{user.bank} in the bank.")
                 return
-            msg = f"Withdrew £{amt} from your bank!"
+            msg = f"Withdrew {CURRENCY}{amt} from your bank!"
             user.bank -= amt
             user.cash += amt
         else:
-            await message.channel.send("You should never see this message lol. info: neither €dep or €with inside of the block that should check for it")
+            await message.channel.send(f"You should never see this message lol. info: neither {PREFIX}dep or {PREFIX}with inside of the block that should check for it")
             return
         
         await send_success(message, msg)
 
-    if message.content == "€slut" or message.content == "€crime":
-        user = users[message.author.id]
+    if message.content == PREFIX + "slut" or message.content == PREFIX + "crime":
+        user = users[message.author.uuid]
         current_time = datetime.datetime.now().timestamp()
-        if message.content == "€slut":
+        action = message.content.replace(PREFIX, "")
+        if action == "slut":
             if current_time - user.last_slut < SLUT_WAIT_SECONDS:
                 await send_no_time(message, SLUT_WAIT_MESSAGE, SLUT_WAIT_SECONDS, user.last_slut)
                 return
 
             user.last_slut = current_time
 
-            chance = SLUT_CHANCE
-            minamt = SLUT_MIN
-            maxamt = SLUT_MAX
-            minpercent = SLUT_MIN_PERCENT
-            maxpercent = SLUT_MAX_PERCENT
+            chance = SLUT_SUCCESS_CHANCE
+            minamt = SLUT_MIN_GAIN
+            maxamt = SLUT_MAX_GAIN
+            minpercent = SLUT_MIN_PERCENT_LOSS
+            maxpercent = SLUT_MAX_PERCENT_LOSS
             
         else:
             if current_time - user.last_crime < CRIME_WAIT_SECONDS:
@@ -244,23 +209,23 @@ async def on_message(message):
                 return
 
             user.last_crime = current_time
-            
-        if random.random() > CRIME_SUCCESS_CHANCE:
-            amount = random.randint(CRIME_MIN_GAIN, CRIME_MAX_GAIN)
-            update_cash(amount)
-            await send_success(message, random.choice(goodmsgs).replace("{amount}", str(amount)), emoji=False)
-        else:
-            amount = (get_cash() + get_bank()) * (random.randint(CRIME_MIN_PERCENT_LOSS, CRIME_MAX_PERCENT_LOSS) / 100)
-            update_cash(-round(amount))
-            await send_error(message, random.choice(badmsgs).replace("{amount}", str(amount)), emoji=False)
 
-    if listening_for_bal is not None and message.author.id == 292953664492929025 and len(message.embeds) > 0:
-        embed = message.embeds[0].to_dict()
-        if embed["author"]["name"] == str(client.get_user(listening_for_bal)):
-            user = users[listening_for_bal]
-            user.cash = int(embed["fields"][0]["value"].replace("£", "").replace(",", ""))
-            user.bank = int(embed["fields"][1]["value"].replace("£", "").replace(",", ""))
-            listening_for_bal = None
+            chance = CRIME_SUCCESS_CHANCE
+            minamt = CRIME_MIN_GAIN
+            maxamt = CRIME_MAX_GAIN
+            minpercent = CRIME_MIN_PERCENT_LOSS
+            maxpercent = CRIME_MAX_PERCENT_LOSS
+            
+            
+        if random.random() > chance:
+            amount = random.randint(minamt, maxamt)
+            user.cash += amount
+            await send_success(message, random.choice(MESSAGES[action]["good"]).replace("{amount}", CURRENCY + str(amount)), emoji=False)
+        else:
+            amount = (user.cash + user.bank) * (random.randint(minpercent, maxpercent) / 100)
+            user.cash -= round(amount)
+            await send_error(message, random.choice(MESSAGES[action]["bad"]).replace("{amount}", CURRENCY + str(amount)), emoji=False)
+
     save()
 
 @client.event
@@ -289,6 +254,6 @@ async def on_ready():
 # 
     # print("done")
 
-client.run(TOKEN)
+client.run()
 
 save()
