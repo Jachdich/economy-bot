@@ -102,7 +102,7 @@ async def blackjack(ctx: asterpy.Message):
         return
 
     if amount > users[ctx.author.uuid].cash:
-        await ctx.channel.send(f"You can't bet {CURRENCY}{amount} because you only have {CURRENCY}{users[ctx.author.uuid].cash} in cash")
+        await ctx.channel.send(f"You can't bet {format_money(amount)} because you only have {format_money(users[ctx.author.uuid].cash)} in cash")
         return
     users[ctx.author.uuid].cash -= amount
 
