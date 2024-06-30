@@ -43,6 +43,19 @@ DECK = [card + suit for suit in SUITS for card in CARDS]
 deck = DECK.copy()
 random.shuffle(deck)
 
+def format_money(amt):
+    if amt < 0:
+        amt = -amt
+        minus = "-"
+    else:
+        minus = ""
+
+    if amt % 1 == 0.0:
+        amt = int(amt)
+    else:
+        amt = f"{amt:.2f}"
+    return f"{minus}{CURRENCY}{amt}"
+
 async def get_response(ctx: asterpy.Message):
     async with lock:
         responses_pending[(ctx.author.uuid, ctx.channel.uid)] = None
@@ -85,7 +98,7 @@ async def blackjack(ctx: asterpy.Message):
             return
 
     if amount < MIN_BET:
-        await ctx.channel.send(f"You must bet at least {CURRENCY}{MIN_BET}!")
+        await ctx.channel.send(f"You must bet at least {format_money(MIN_BET)}!")
         return
 
     if amount > users[ctx.author.uuid].cash:
@@ -115,7 +128,7 @@ Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} V
         return msg
 
     if hand_value(player_hand)[0] > 21:
-        await ctx.channel.send(format_message(f"Blackjack: Blackjack {CURRENCY}{amount * 2}", []))
+        await ctx.channel.send(format_message(f"Blackjack: Blackjack {format_money(amount * 2)}", []))
         users[ctx.author.uuid].cash += amount * 2
         return
     else:
@@ -126,11 +139,11 @@ Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} V
         while not action in ["hit", "stand"]:
             action = (await get_response(ctx)).content
 
-        if action == "hit":
+        if action == "hit":{CURRENCY}{amount}
             player_hand.append(deck.pop())
             header = "Blackjack"
             if hand_value(player_hand)[0] > 21:
-                await ctx.channel.send(format_message(f"Blackjack: Bust -{CURRENCY}{amount}", []))
+                await ctx.channel.send(format_message(f"Blackjack: Bust {format_money(-amount)}", []))
                 break
 
             await ctx.channel.send(format_message("Blackjack", ["Hit", "Stand"]))
@@ -141,16 +154,16 @@ Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} V
                 dealer_hand.append(deck.pop())
 
             if hand_value(dealer_hand)[0] > 21:
-                result = f"Dealer bust {CURRENCY}{amount}"
+                result = f"Dealer bust {format_money(amount)}"
                 users[ctx.author.uuid].cash += amount * 2
             elif hand_value(dealer_hand)[0] < hand_value(player_hand)[0]:
-                result = f"Win {CURRENCY}{amount}"
+                result = f"Win {format_money(amount)}"
                 users[ctx.author.uuid].cash += amount * 2
             elif hand_value(dealer_hand)[0] == hand_value(player_hand)[0]:
                 result = "Push (money back)"
                 users[ctx.author.uuid].cash += amount
             else:
-                result = f"Loss -{CURRENCY}{amount}"
+                result = f"Loss {format_money(-amount)}"
             msg = format_message("Blackjack: " + result, [])
             await ctx.channel.send(msg)
             break
@@ -251,9 +264,9 @@ async def on_message(message: asterpy.Message):
             return
 
         msg = f"""Bank Statement
-Cash:  {CURRENCY}{user.cash}
-Bank:  {CURRENCY}{user.bank}
-Total: {CURRENCY}{user.bank + user.cash}"""
+Cash:  {format_money(user.cash)}
+Bank:  {format_money(user.bank)}
+Total: {format_money(user.bank + user.cash)}"""
         await message.channel.send(msg)
 
     if message.content == "€work":
@@ -266,7 +279,7 @@ Total: {CURRENCY}{user.bank + user.cash}"""
         user.last_work = current_time
         amount = random.randint(400, 1200)
         user.cash += amount
-        await send_success(message, random.choice(MESSAGES["work"]).replace("{amount}", CURRENCY + str(amount)), emoji=False)
+        await send_success(message, random.choice(MESSAGES["work"]).replace("{amount}", format_money(amount)), emoji=False)
 
     if message.content.startswith(PREFIX + "dep") or message.content.startswith(PREFIX + "with"):
         if len(message.content.split(" ")) != 2:
@@ -291,21 +304,21 @@ Total: {CURRENCY}{user.bank + user.cash}"""
                 await send_error(message, "You don't have that much money to deposit. You currently have £{user.cash} on hand.")
                 return
             if amt <= 0:
-                await send_error(message, f"You cannot deposit {CURRENCY}0.")
+                await send_error(message, f"You cannot deposit {format_money(0)}.")
                 return
             
             amt = min(MAX_BANK - user.bank, amt)
             if MAX_BANK - user.bank <= 0:
                 await send_error(message, "Maximum bank balance reached.")
                 return
-            msg = f"Deposited {CURRENCY}{amt} to your bank!"
+            msg = f"Deposited {format_money(amt)} to your bank!"
             user.bank += amt
             user.cash -= amt
         elif message.content.startswith(PREFIX + "with"):
             if amt > user.bank:
-                await send_error(message, f"You don't have that much money to withdraw. You currently have {CURRENCY}{user.bank} in the bank.")
+                await send_error(message, f"You don't have that much money to withdraw. You currently have {format_money(user.bank)} in the bank.")
                 return
-            msg = f"Withdrew {CURRENCY}{amt} from your bank!"
+            msg = f"Withdrew {format_money(amt)} from your bank!"
             user.bank -= amt
             user.cash += amt
         else:
@@ -344,15 +357,14 @@ Total: {CURRENCY}{user.bank + user.cash}"""
             minpercent = CRIME_MIN_PERCENT_LOSS
             maxpercent = CRIME_MAX_PERCENT_LOSS
             
-            
         if random.random() > chance:
             amount = random.randint(minamt, maxamt)
             user.cash += amount
-            await send_success(message, random.choice(MESSAGES[action]["good"]).replace("{amount}", CURRENCY + str(amount)), emoji=False)
+            await send_success(message, random.choice(MESSAGES[action]["good"]).replace("{amount}", format_money(amount)), emoji=False)
         else:
             amount = (user.cash + user.bank) * (random.randint(minpercent, maxpercent) / 100)
-            user.cash -= round(amount)
-            await send_error(message, random.choice(MESSAGES[action]["bad"]).replace("{amount}", CURRENCY + str(amount)), emoji=False)
+            user.cash -= round(amount, 2)
+            await send_error(message, random.choice(MESSAGES[action]["bad"]).replace("{amount}", format_money(amount)), emoji=False)
 
     if message.content.startswith(PREFIX + "bj") or message.content.startswith(PREFIX + "blackjack"):
         await blackjack(message)
