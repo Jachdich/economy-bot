@@ -29,6 +29,7 @@ CRIME_SUCCESS_CHANCE = 0.85
 CRIME_WAIT_MESSAGE = "You cannot commit a crime for"
    
 MAX_BANK = 10000
+MIN_BET = 100
 
 PREFIX = "€"
 CURRENCY = "€"
@@ -82,6 +83,10 @@ async def blackjack(ctx: asterpy.Message):
         except:
             await ctx.channel.send(f"Invalid amount!")
             return
+
+    if amount < MIN_BET:
+        await ctx.channel.send(f"You must bet at least {CURRENCY}{MIN_BET}!")
+        return
 
     users[ctx.author.uuid].cash -= amount
 
@@ -243,9 +248,9 @@ async def on_message(message: asterpy.Message):
             return
 
         msg = f"""Bank Statement
-Cash:  £{user.cash}
-Bank:  £{user.bank}
-Total: £{user.bank + user.cash}"""
+Cash:  {CURRENCY}{user.cash}
+Bank:  {CURRENCY}{user.bank}
+Total: {CURRENCY}{user.bank + user.cash}"""
         await message.channel.send(msg)
 
     if message.content == "€work":
