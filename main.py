@@ -58,12 +58,12 @@ def format_money(amt):
 
 async def get_response(ctx: asterpy.Message):
     async with lock:
-        responses_pending[(ctx.author.uuid, ctx.channel.uid)] = None
-        while responses_pending[(ctx.author.uuid, ctx.channel.uid)] is None:
+        responses_pending[(ctx.author.uuid, ctx.channel.uuid)] = None
+        while responses_pending[(ctx.author.uuid, ctx.channel.uuid)] is None:
             await lock.wait()
 
-    response = responses_pending[(ctx.author.uuid, ctx.channel.uid)]
-    del responses_pending[(ctx.author.uuid, ctx.channel.uid)]
+    response = responses_pending[(ctx.author.uuid, ctx.channel.uuid)]
+    del responses_pending[(ctx.author.uuid, ctx.channel.uuid)]
     return response
 
 def hand_value(hand):
@@ -128,11 +128,11 @@ Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} V
         return msg
 
     if hand_value(player_hand)[0] > 21:
-        await ctx.channel.send(format_message(f"Blackjack: Blackjack {format_money(amount * 2)}", []))
+        info_message = await ctx.channel.send(format_message(f"Blackjack: Blackjack {format_money(amount * 2)}", []))
         users[ctx.author.uuid].cash += amount * 2
         return
     else:
-        await ctx.channel.send(format_message("Blackjack", ["Hit", "Stand"]))
+        info_message = await ctx.channel.send(format_message("Blackjack", ["Hit", "Stand"]))
     
     while True:
         action = None
@@ -143,10 +143,10 @@ Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} V
             player_hand.append(deck.pop())
             header = "Blackjack"
             if hand_value(player_hand)[0] > 21:
-                await ctx.channel.send(format_message(f"Blackjack: Bust {format_money(-amount)}", []))
+                await info_message.edit(format_message(f"Blackjack: Bust {format_money(-amount)}", []))
                 break
 
-            await ctx.channel.send(format_message("Blackjack", ["Hit", "Stand"]))
+            await info_message.edit(format_message("Blackjack", ["Hit", "Stand"]))
 
         if action == "stand":
             dealer_hand.append(dealer_next)
@@ -165,7 +165,7 @@ Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} V
             else:
                 result = f"Loss {format_money(-amount)}"
             msg = format_message("Blackjack: " + result, [])
-            await ctx.channel.send(msg)
+            await info_message.edit(msg)
             break
     
 
@@ -239,7 +239,7 @@ async def on_message(message: asterpy.Message):
     global users
 
     for author_id, channel_id in responses_pending:
-        if message.author.uuid == author_id and message.channel.uid == channel_id:
+        if message.author.uuid == author_id and message.channel.uuid == channel_id:
             responses_pending[(author_id, channel_id)] = message
             async with lock:
                 lock.notify()
