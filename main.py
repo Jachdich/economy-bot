@@ -13,7 +13,7 @@ BLUE  = 0x03A9F4
 WORK_WAIT_SECONDS = 10 * 60
 
 SLUT_WAIT_SECONDS = 15 * 60
-SLUT_MIN_GAIN = 800000
+SLUT_MIN_GAIN = 800
 SLUT_MAX_GAIN = 2200
 SLUT_MIN_PERCENT_LOSS = 35
 SLUT_MAX_PERCENT_LOSS = 75
@@ -139,7 +139,7 @@ Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} V
         while not action in ["hit", "stand"]:
             action = (await get_response(ctx)).content
 
-        if action == "hit":{CURRENCY}{amount}
+        if action == "hit":
             player_hand.append(deck.pop())
             header = "Blackjack"
             if hand_value(player_hand)[0] > 21:
