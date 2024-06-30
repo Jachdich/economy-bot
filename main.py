@@ -2,9 +2,7 @@ import asterpy, time, asyncio, json, datetime, re, random, math
 
 
 client = asterpy.Client("bean", "a")
-client.add_server("cospox.com", 2345, uuid=1508917622722412285)
-
-listening_for_bal = -1
+client.add_server("cospox.com", 2345, uuid=1473552365939855)
 
 users = {}
 
@@ -34,6 +32,121 @@ MAX_BANK = 10000
 
 PREFIX = "€"
 CURRENCY = "€"
+
+responses_pending = {}
+lock = asyncio.Condition()
+
+SUITS = ["♣", "♠", "♥", "♦"]
+CARDS = {"A": 11, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 10, "Q": 10, "K": 10}
+DECK = [card + suit for suit in SUITS for card in CARDS]
+deck = DECK.copy()
+random.shuffle(deck)
+
+async def get_response(ctx: asterpy.Message):
+    async with lock:
+        responses_pending[(ctx.author.uuid, ctx.channel.uid)] = None
+        while responses_pending[(ctx.author.uuid, ctx.channel.uid)] is None:
+            await lock.wait()
+
+    response = responses_pending[(ctx.author.uuid, ctx.channel.uid)]
+    del responses_pending[(ctx.author.uuid, ctx.channel.uid)]
+    return response
+
+def hand_value(hand):
+    total = 0
+    soft = False
+    for card in sorted(hand, key=lambda a: a.startswith("A")):
+        if card[0] == "A":
+            if total + 11 > 21:
+                total += 1
+            else:
+                total += 11
+                soft = True
+        else:
+            total += CARDS[card[:-1]]
+
+    return total, soft
+
+async def blackjack(ctx: asterpy.Message):
+    # TODO doesn't win automatically if you have blackjack
+    global deck
+    argv = ctx.content.split(" ")
+    if len(argv) != 2:
+        await ctx.channel.send(f"Wrong arguments! Usage: {argv[0]} <amount or all>")
+        return
+    if argv[1] == "all":
+        amount = users[ctx.author.uuid].cash
+    else:
+        try:
+            amount = float(argv[1])
+        except:
+            await ctx.channel.send(f"Invalid amount!")
+            return
+
+    users[ctx.author.uuid].cash -= amount
+
+    if len(deck) < 16:
+        deck = DECK.copy()
+        random.shuffle(deck)
+
+    dealer_hand = [deck.pop()]
+    dealer_next = deck.pop()
+    player_hand = [deck.pop(), deck.pop()]
+
+    def format_value(value):
+        total, soft = value
+        return ("Soft " if soft else "") + ("Blackjack" if total == 21 else str(total))
+
+    def format_message(header, actions):
+        msg = f"""{header}
+Your hand:   {' '.join(player_hand)} Value: {format_value(hand_value(player_hand))}
+Dealer hand: {' '.join(dealer_hand)} {'🎴' if len(dealer_hand) == 1 else ''} Value: {format_value(hand_value(dealer_hand))}"""
+        if len(actions) != 0:
+            msg += "\nActions: " + ", ".join(actions)
+        msg += f"\nCards remaining: {len(deck)}"
+        return msg
+
+    if hand_value(player_hand)[0] > 21:
+        await ctx.channel.send(format_message(f"Blackjack: Blackjack {CURRENCY}{amount * 2}", []))
+        users[ctx.author.uuid].cash += amount * 2
+        return
+    else:
+        await ctx.channel.send(format_message("Blackjack", ["Hit", "Stand"]))
+    
+    while True:
+        action = None
+        while not action in ["hit", "stand"]:
+            action = (await get_response(ctx)).content
+
+        if action == "hit":
+            player_hand.append(deck.pop())
+            header = "Blackjack"
+            if hand_value(player_hand)[0] > 21:
+                await ctx.channel.send(format_message(f"Blackjack: Bust -{CURRENCY}{amount}", []))
+                break
+
+            await ctx.channel.send(format_message("Blackjack", ["Hit", "Stand"]))
+
+        if action == "stand":
+            dealer_hand.append(dealer_next)
+            while hand_value(dealer_hand)[0] < 17:
+                dealer_hand.append(deck.pop())
+
+            if hand_value(dealer_hand)[0] > 21:
+                result = f"Dealer bust {CURRENCY}{amount}"
+                users[ctx.author.uuid].cash += amount * 2
+            elif hand_value(dealer_hand)[0] < hand_value(player_hand)[0]:
+                result = f"Win {CURRENCY}{amount}"
+                users[ctx.author.uuid].cash += amount * 2
+            elif hand_value(dealer_hand)[0] == hand_value(player_hand)[0]:
+                result = "Push (money back)"
+                users[ctx.author.uuid].cash += amount
+            else:
+                result = f"Loss -{CURRENCY}{amount}"
+            msg = format_message("Blackjack: " + result, [])
+            await ctx.channel.send(msg)
+            break
+    
 
 class User:
     def __init__(self, uuid):
@@ -103,10 +216,17 @@ async def on_message(message: asterpy.Message):
         return
     print(message.content)
     global users
-    global listening_for_bal
+
+    for author_id, channel_id in responses_pending:
+        if message.author.uuid == author_id and message.channel.uid == channel_id:
+            responses_pending[(author_id, channel_id)] = message
+            async with lock:
+                lock.notify()
+
     if message.content.startswith(PREFIX):
         if not message.author.uuid in users:
             users[message.author.uuid] = User(message.author.uuid)
+
     if message.content.startswith(PREFIX + "bal"):
         sp = message.content.split(" ")
         if len(sp) == 1:
@@ -226,6 +346,8 @@ Total: £{user.bank + user.cash}"""
             user.cash -= round(amount)
             await send_error(message, random.choice(MESSAGES[action]["bad"]).replace("{amount}", CURRENCY + str(amount)), emoji=False)
 
+    if message.content.startswith(PREFIX + "bj") or message.content.startswith(PREFIX + "blackjack"):
+        await blackjack(message)
     save()
 
 @client.event
