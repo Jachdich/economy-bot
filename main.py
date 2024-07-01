@@ -75,7 +75,8 @@ def hand_value(hand):
                 total += 1
             else:
                 total += 11
-                soft = True
+                if total != 21:
+                    soft = True
         else:
             total += CARDS[card[:-1]]
 
