@@ -2,7 +2,8 @@ import asterpy, time, asyncio, json, datetime, re, random, math
 
 
 client = asterpy.Client("bean", "a")
-client.add_server("cospox.com", 2345, uuid=1473552365939855)
+# client.add_server("cospox.com", 2345, uuid=1473552365939855)
+client.add_server("localhost", 2345, uuid=4645705226395143)
 
 users = {}
 
@@ -38,8 +39,8 @@ responses_pending = {}
 lock = asyncio.Condition()
 
 SUITS = ["♣", "♠", "♥", "♦"]
-CARDS = {"A": 11, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 10, "Q": 10, "K": 10}
-DECK = [card + suit for suit in SUITS for card in CARDS]
+CARDS = {"A": 11, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 10, "Q": 10, "K": 10, "161": 161}
+DECK = [card + suit for suit in SUITS for card in CARDS if not (card == "161" and suit != "♣")]
 deck = DECK.copy()
 random.shuffle(deck)
 
